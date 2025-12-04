@@ -1,1 +1,88 @@
-1
+name: MLflow Training CI
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+
+    steps:
+    # ---------------------------------------------------
+    # 1. Checkout repository
+    # ---------------------------------------------------
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # ---------------------------------------------------
+    # 2. Setup Python
+    # ---------------------------------------------------
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+
+    # ---------------------------------------------------
+    # 3. Install dependencies
+    # ---------------------------------------------------
+    - name: Install Dependencies
+      run: |
+        pip install -r requirements.txt
+
+    # ---------------------------------------------------
+    # 4. Jalankan modelling.py
+    # ---------------------------------------------------
+    - name: Run Training Script
+      run: |
+        python modelling.py
+        ls -R .
+
+    # ---------------------------------------------------
+    # 5. Upload MLflow Artifacts (folder mlruns)
+    # ---------------------------------------------------
+    - name: Upload MLflow Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: mlflow-artifacts
+        path: |
+          mlruns/
+        if-no-files-found: warn
+
+    # ---------------------------------------------------
+    # 6. Build MLflow Docker Image
+    # ---------------------------------------------------
+    - name: Build MLflow Docker Image
+      run: |
+        LAST_RUN=$(ls -td mlruns/*/* | head -1)
+        MODEL_PATH="$LAST_RUN/artifacts/model"
+        echo "Using model at: $MODEL_PATH"
+
+        mlflow models build-docker \
+          --model-uri "$MODEL_PATH" \
+          --name churn-mlflow-image
+
+    # ---------------------------------------------------
+    # 7. Docker Login
+    # ---------------------------------------------------
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    # ---------------------------------------------------
+    # 8. Tag image
+    # ---------------------------------------------------
+    - name: Tag Docker Image
+      run: |
+        docker tag churn-mlflow-image \
+        ${{ secrets.DOCKERHUB_USERNAME }}/churn-mlflow-model:latest
+
+    # ---------------------------------------------------
+    # 9. Push Docker image
+    # ---------------------------------------------------
+    - name: Push Docker Image
+      run: |
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/churn-mlflow-model:latest
