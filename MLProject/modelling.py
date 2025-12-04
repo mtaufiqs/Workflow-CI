@@ -7,7 +7,7 @@ from sklearn.ensemble import RandomForestClassifier
 import os
 
 # ===== 1. Load data =====
-df_path = r"C:\Users\User\Downloads\SMSML_Muhammad-Taufiqurrahman\Eksperimen_SML_Muhammad-Taufiqurrahman\preprocessing\Telco-Customer-Churn_preprocessing\Telco-Customer-Churn_cleaned.csv"
+df_path = df_path = "data/Telco-Customer-Churn_cleaned.csv"
 
 if not os.path.exists(df_path):
     raise FileNotFoundError(f"❌ File tidak ditemukan di lokasi: {df_path}")
@@ -65,4 +65,5 @@ with mlflow.start_run(run_name="Baseline RandomForest"):
 
     # ===== 7. Tampilkan hasil akhir =====
     print("📋 Classification Report:")
+
     print(classification_report(y_test, y_pred))
