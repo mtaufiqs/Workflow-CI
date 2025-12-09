@@ -1,4 +1,5 @@
 import mlflow
+import joblib
 import mlflow.sklearn
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -6,8 +7,10 @@ from sklearn.metrics import accuracy_score, classification_report
 from sklearn.ensemble import RandomForestClassifier
 import os
 
-# ===== 1. Load data =====
-df_path = df_path = "data/Telco-Customer-Churn_cleaned.csv"
+# ===============================
+# 1. Load Data
+# ===============================
+df_path = "data/Telco-Customer-Churn_cleaned.csv"
 
 if not os.path.exists(df_path):
     raise FileNotFoundError(f"❌ File tidak ditemukan di lokasi: {df_path}")
@@ -15,55 +18,81 @@ if not os.path.exists(df_path):
 df = pd.read_csv(df_path)
 print(f"✅ Dataset berhasil dimuat. Jumlah baris: {len(df)}, kolom: {len(df.columns)}")
 
-# Hapus kolom ID unik yang tidak berguna
+# Hapus kolom ID unik
 if 'customerID' in df.columns:
     df = df.drop(columns=['customerID'])
     print("🧹 Kolom 'customerID' dihapus dari dataset.")
 
-# Ubah variabel kategorikal menjadi numerik (one-hot encoding)
+# One-hot encoding
 df = pd.get_dummies(df, drop_first=True)
 print("🔢 Data kategorikal telah dikonversi menjadi numerik (one-hot encoding).")
 
-# Pisahkan fitur dan target
+# Fitur & target
 if "Churn_Yes" not in df.columns:
-    raise KeyError("❌ Kolom target 'Churn_Yes' tidak ditemukan. Pastikan preprocessing benar.")
+    raise KeyError("❌ Kolom target 'Churn_Yes' tidak ditemukan.")
 X = df.drop("Churn_Yes", axis=1)
 y = df["Churn_Yes"]
 
-# ===== 2. Split data =====
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-print(f"📊 Data dibagi menjadi {len(X_train)} data train dan {len(X_test)} data test.\n")
+# ===============================
+# 2. Train–Test Split
+# ===============================
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+print(f"📊 Data dibagi menjadi {len(X_train)} train dan {len(X_test)} test.\n")
 
-# ===== 3. Setup MLflow =====
-# Pastikan mlruns berada di dalam folder Membangun_Model
-project_dir = r"C:\Users\User\Downloads\SMSML_Muhammad-Taufiqurrahman\Membangun_Model"
-mlruns_path = f"file:///{project_dir}/mlruns"
+# ===============================
+# 3. MLflow Setup (DAGSHUB)
+# ===============================
 
-mlflow.set_tracking_uri(mlruns_path)
-mlflow.set_experiment("Telco Customer Churn")
+# --- GANTI BAGIAN INI SESUAI AKUN KAMU ---
+username = "mtaufiqs"
+repo_name = "Telco-Customer-Churn_ML"        
+token = "a67685815efad765647071cd82204763a3ea0b15"
+# ------------------------------------------
 
-# Tampilkan lokasi aktif untuk verifikasi
+# Tracking URI DagsHub
+tracking_uri = f"https://dagshub.com/{username}/{repo_name}.mlflow"
+mlflow.set_tracking_uri(tracking_uri)
+
+# Set kredensial (harus sebelum start_run)
+os.environ["MLFLOW_TRACKING_USERNAME"] = username
+os.environ["MLFLOW_TRACKING_PASSWORD"] = token
+
+mlflow.set_experiment("Telco-Customer-Churn-DagsHub")
+
 print("📂 Tracking URI aktif:", mlflow.get_tracking_uri())
 
-with mlflow.start_run(run_name="Baseline RandomForest"):
-    # ===== 4. Model =====
+# ===============================
+# 4. Train + MLflow logging
+# ===============================
+with mlflow.start_run(run_name="Baseline-RandomForest"):
+
+    # Model
     model = RandomForestClassifier(n_estimators=100, random_state=42)
     model.fit(X_train, y_train)
     print("🤖 Model RandomForest berhasil dilatih.")
 
-    # ===== 5. Evaluasi =====
+    # Evaluasi
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     print(f"🎯 Akurasi model: {acc:.4f}\n")
 
-    # ===== 6. Log MLflow =====
+    # MLflow Manual Logging
     mlflow.log_param("n_estimators", 100)
     mlflow.log_metric("accuracy", acc)
-    mlflow.sklearn.log_model(model, "model")
 
-    print("📦 Model dan metrik telah dicatat ke MLflow.\n")
+    # Simpan model
+    joblib.dump(model, "model.pkl")
+    mlflow.log_artifact("model.pkl")
 
-    # ===== 7. Tampilkan hasil akhir =====
+    # Log artefak tambahan
+    report_path = "classification_report.txt"
+    with open(report_path, "w") as f:
+        f.write(classification_report(y_test, y_pred))
+    mlflow.log_artifact(report_path)
+
+    print("📦 Model, metrik, dan artefak telah dicatat ke MLflow.\n")
+
     print("📋 Classification Report:")
-
     print(classification_report(y_test, y_pred))
