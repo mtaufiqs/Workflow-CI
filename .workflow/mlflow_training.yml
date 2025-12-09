@@ -1,4 +1,4 @@
-name: MLflow Training CI
+name: ML Pipeline - Train, Artifacts, Docker
 
 on:
   push:
@@ -6,83 +6,102 @@ on:
   workflow_dispatch:
 
 jobs:
-  train:
+  ml_pipeline:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
-    # ---------------------------------------------------
-    # 1. Checkout repository
-    # ---------------------------------------------------
-    - name: Checkout Code
+    - name: Checkout repo
       uses: actions/checkout@v4
 
-    # ---------------------------------------------------
-    # 2. Setup Python
-    # ---------------------------------------------------
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
 
-    # ---------------------------------------------------
-    # 3. Install dependencies
-    # ---------------------------------------------------
-    - name: Install Dependencies
+    - name: Install dependencies
       run: |
         pip install -r requirements.txt
 
-    # ---------------------------------------------------
-    # 4. Jalankan modelling.py
-    # ---------------------------------------------------
-    - name: Run Training Script
+    # -------------------------
+    # Provide MLflow credentials for remote tracking (optional)
+    # -------------------------
+    - name: Set MLflow env (optional DagsHub)
+      if: ${{ secrets.MLFLOW_TRACKING_URI != '' }}
+      run: |
+        echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}" >> $GITHUB_ENV
+        echo "MLFLOW_TRACKING_USERNAME=${{ secrets.MLFLOW_TRACKING_USERNAME }}" >> $GITHUB_ENV
+        echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.MLFLOW_TRACKING_PASSWORD }}" >> $GITHUB_ENV
+        echo "MLFLOW_EXPERIMENT_NAME=${{ secrets.MLFLOW_EXPERIMENT_NAME }}" >> $GITHUB_ENV
+
+    # -------------------------
+    # Run training
+    # -------------------------
+    - name: Run training (modelling.py)
       run: |
         python modelling.py
-        ls -R .
+        ls -la
+        ls -la rf_model || true
 
-    # ---------------------------------------------------
-    # 5. Upload MLflow Artifacts (folder mlruns)
-    # ---------------------------------------------------
-    - name: Upload MLflow Artifacts
+    # -------------------------
+    # Upload artifacts to GitHub Actions (for download)
+    # -------------------------
+    - name: Upload artifacts to Actions
       uses: actions/upload-artifact@v4
       with:
-        name: mlflow-artifacts
+        name: churn-artifacts
         path: |
-          mlruns/
-        if-no-files-found: warn
+          model.pkl
+          rf_model
+          confusion_matrix.png
+          feature_importance.png
+          classification_report.txt
+        retention-days: 7
 
-    # ---------------------------------------------------
-    # 6. Build MLflow Docker Image
-    # ---------------------------------------------------
-    - name: Build MLflow Docker Image
+    # -------------------------
+    # Create GitHub Release and attach key artifacts
+    # -------------------------
+    - name: Create GitHub Release (attach plots + report)
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: "model-$(date +'%Y%m%d-%H%M%S')"
+        name: "Churn model release ${{ github.run_id }}"
+        files: |
+          confusion_matrix.png
+          feature_importance.png
+          classification_report.txt
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # -------------------------
+    # Optional: upload to Google Drive (if secrets provided)
+    # -------------------------
+    - name: Upload to Google Drive (optional)
+      if: ${{ secrets.GDRIVE_CREDENTIALS != '' && secrets.GDRIVE_FOLDER_ID != '' }}
       run: |
-        LAST_RUN=$(ls -td mlruns/*/* | head -1)
-        MODEL_PATH="$LAST_RUN/artifacts/model"
-        echo "Using model at: $MODEL_PATH"
+        pip install gdown
+        echo '${{ secrets.GDRIVE_CREDENTIALS }}' > gdrive_creds.json
+        gdown --service-account gdrive_creds.json --upload model.pkl --parent ${{ secrets.GDRIVE_FOLDER_ID }}
 
-        mlflow models build-docker \
-          --model-uri "$MODEL_PATH" \
-          --name churn-mlflow-image
+    # -------------------------
+    # Build Docker image from local rf_model (mlflow models build-docker)
+    # -------------------------
+    - name: Build MLflow Docker image
+      run: |
+        # make sure rf_model exists
+        if [ ! -d "rf_model" ]; then echo "rf_model not found"; exit 1; fi
+        mlflow models build-docker --model-uri rf_model -n churn-mlflow-image
 
-    # ---------------------------------------------------
-    # 7. Docker Login
-    # ---------------------------------------------------
-    - name: Login to Docker Hub
+    # -------------------------
+    # Docker login & push
+    # -------------------------
+    - name: Docker login
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    # ---------------------------------------------------
-    # 8. Tag image
-    # ---------------------------------------------------
-    - name: Tag Docker Image
+    - name: Tag & Push image
       run: |
-        docker tag churn-mlflow-image \
-        ${{ secrets.DOCKERHUB_USERNAME }}/churn-mlflow-model:latest
-
-    # ---------------------------------------------------
-    # 9. Push Docker image
-    # ---------------------------------------------------
-    - name: Push Docker Image
-      run: |
-        docker push ${{ secrets.DOCKERHUB_USERNAME }}/churn-mlflow-model:latest
+        docker tag churn-mlflow-image:latest ${{ secrets.DOCKERHUB_USERNAME }}/churn-ml-model:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/churn-ml-model:latest
