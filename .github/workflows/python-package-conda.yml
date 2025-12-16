@@ -2,7 +2,7 @@ name: ML Pipeline - Train, Artifacts, Docker
 
 on:
   push:
-    branches: ["main"]
+    branches: [""]
   workflow_dispatch:
 
 jobs:
