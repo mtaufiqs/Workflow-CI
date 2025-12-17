@@ -48,7 +48,7 @@ print(f"📊 Data dibagi menjadi {len(X_train)} train dan {len(X_test)} test.\n"
 # --- GANTI BAGIAN INI SESUAI AKUN KAMU ---
 username = "mtaufiqs"
 repo_name = "Telco-Customer-Churn_ML"        
-token = "a67685815efad765647071cd82204763a3ea0b15"
+token = "e112da09dfbf78c022bd120faed1da98ba21c44e"
 # ------------------------------------------
 
 # Tracking URI DagsHub
@@ -59,7 +59,10 @@ mlflow.set_tracking_uri(tracking_uri)
 os.environ["MLFLOW_TRACKING_USERNAME"] = username
 os.environ["MLFLOW_TRACKING_PASSWORD"] = token
 
-mlflow.set_experiment("Telco-Customer-Churn-DagsHub")
+if os.getenv("MLFLOW_TRACKING_URI"):
+    mlflow.set_experiment("Telco-Customer-Churn-DagsHub")
+else:
+    mlflow.set_experiment("Local-Experiment")
 
 print("📂 Tracking URI aktif:", mlflow.get_tracking_uri())
 
@@ -96,3 +99,4 @@ with mlflow.start_run(run_name="Baseline-RandomForest"):
 
     print("📋 Classification Report:")
     print(classification_report(y_test, y_pred))
+
