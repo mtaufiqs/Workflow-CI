@@ -1,11 +1,12 @@
+import os
 import mlflow
-import joblib
 import mlflow.sklearn
+import joblib
 import pandas as pd
+
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.ensemble import RandomForestClassifier
-import os
 
 # ===============================
 # 1. Load Data
@@ -18,18 +19,19 @@ if not os.path.exists(df_path):
 df = pd.read_csv(df_path)
 print(f"✅ Dataset berhasil dimuat. Jumlah baris: {len(df)}, kolom: {len(df.columns)}")
 
-# Hapus kolom ID unik
-if 'customerID' in df.columns:
-    df = df.drop(columns=['customerID'])
-    print("🧹 Kolom 'customerID' dihapus dari dataset.")
+# Hapus kolom ID
+if "customerID" in df.columns:
+    df = df.drop(columns=["customerID"])
+    print("🧹 Kolom 'customerID' dihapus.")
 
 # One-hot encoding
 df = pd.get_dummies(df, drop_first=True)
-print("🔢 Data kategorikal telah dikonversi menjadi numerik (one-hot encoding).")
+print("🔢 Data kategorikal di-encode.")
 
 # Fitur & target
 if "Churn_Yes" not in df.columns:
     raise KeyError("❌ Kolom target 'Churn_Yes' tidak ditemukan.")
+
 X = df.drop("Churn_Yes", axis=1)
 y = df["Churn_Yes"]
 
@@ -39,65 +41,52 @@ y = df["Churn_Yes"]
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
 )
-print(f"📊 Data dibagi menjadi {len(X_train)} train dan {len(X_test)} test.\n")
+
+print(f"📊 Train: {len(X_train)}, Test: {len(X_test)}")
 
 # ===============================
-# 3. MLflow Setup (DAGSHUB)
+# 3. Training (MLflow Project SAFE)
 # ===============================
-
-# --- GANTI BAGIAN INI SESUAI AKUN KAMU ---
-username = "mtaufiqs"
-repo_name = "Telco-Customer-Churn_ML"        
-token = "a67685815efad765647071cd82204763a3ea0b15"
-# ------------------------------------------
-
-# Tracking URI DagsHub
-tracking_uri = f"https://dagshub.com/{username}/{repo_name}.mlflow"
-mlflow.set_tracking_uri(tracking_uri)
-
-# Set kredensial (harus sebelum start_run)
-os.environ["MLFLOW_TRACKING_USERNAME"] = username
-os.environ["MLFLOW_TRACKING_PASSWORD"] = token
-
-if os.getenv("MLFLOW_TRACKING_URI"):
-    mlflow.set_experiment("Telco-Customer-Churn-DagsHub")
-else:
-    mlflow.set_experiment("Local-Experiment")
 
 print("📂 Tracking URI aktif:", mlflow.get_tracking_uri())
+print("👤 Tracking user:", os.getenv("MLFLOW_TRACKING_USERNAME"))
+
+# ⛔ JANGAN set_experiment
+# ⛔ JANGAN start_run
+# mlflow run SUDAH MENANGANI RUN-NYA
+
+model = RandomForestClassifier(
+    n_estimators=100,
+    random_state=42
+)
+model.fit(X_train, y_train)
+print("🤖 Model RandomForest dilatih.")
+
+# Evaluasi
+y_pred = model.predict(X_test)
+acc = accuracy_score(y_test, y_pred)
+print(f"🎯 Akurasi: {acc:.4f}")
 
 # ===============================
-# 4. Train + MLflow logging
+# 4. MLflow Logging
 # ===============================
-with mlflow.start_run(run_name="Baseline-RandomForest"):
 
-    # Model
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
-    print("🤖 Model RandomForest berhasil dilatih.")
+mlflow.log_param("model_type", "RandomForest")
+mlflow.log_param("n_estimators", 100)
+mlflow.log_metric("accuracy", acc)
 
-    # Evaluasi
-    y_pred = model.predict(X_test)
-    acc = accuracy_score(y_test, y_pred)
-    print(f"🎯 Akurasi model: {acc:.4f}\n")
+# Simpan model
+model_path = "model.pkl"
+joblib.dump(model, model_path)
+mlflow.log_artifact(model_path)
 
-    # MLflow Manual Logging
-    mlflow.log_param("n_estimators", 100)
-    mlflow.log_metric("accuracy", acc)
+# Classification report
+report_path = "classification_report.txt"
+with open(report_path, "w") as f:
+    f.write(classification_report(y_test, y_pred))
 
-    # Simpan model
-    joblib.dump(model, "model.pkl")
-    mlflow.log_artifact("model.pkl")
+mlflow.log_artifact(report_path)
 
-    # Log artefak tambahan
-    report_path = "classification_report.txt"
-    with open(report_path, "w") as f:
-        f.write(classification_report(y_test, y_pred))
-    mlflow.log_artifact(report_path)
-
-    print("📦 Model, metrik, dan artefak telah dicatat ke MLflow.\n")
-
-    print("📋 Classification Report:")
-    print(classification_report(y_test, y_pred))
-
-
+print("📦 Model, metrik, dan artefak berhasil dicatat ke MLflow.")
+print("📋 Classification Report:")
+print(classification_report(y_test, y_pred))
