@@ -1,4 +1,4 @@
-name: ML training pipeline 
+name: ML training pipeline (basic) 
 
 on:
   push:
