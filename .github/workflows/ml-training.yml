@@ -50,4 +50,4 @@ jobs:
     - name: Get latest MLflow run_id
       run: |
         echo "Latest MLflow run_id:"
-        mlflow runs list --max-results 1
+        mlflow runs list | head -n 2
