@@ -44,7 +44,7 @@ jobs:
         MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
         MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
       run: |
-        mlflow run . --env-manager=local
+        mlflow run MLProject --env-manager=local
 
     # 7. Get latest MLflow run_id
     - name: Get latest MLflow run_id
