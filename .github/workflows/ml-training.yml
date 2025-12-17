@@ -1,0 +1,53 @@
+name: ML Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  train-mlflow:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Set up job
+    - name: Set up job
+      run: echo "Starting ML CI Pipeline"
+
+    # 2. Checkout repository
+    - name: Run actions/checkout@v3
+      uses: actions/checkout@v3
+
+    # 3. Set up Python
+    - name: Set up Python 3.12.7
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12.7"
+
+    # 4. Check environment
+    - name: Check Env
+      run: |
+        python --version
+        pip --version
+
+    # 5. Install dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mlflow
+
+    # 6. Run MLflow project
+    - name: Run mlflow project
+      env:
+        MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+        MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+        MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
+      run: |
+        mlflow run . --env-manager=local
+
+    # 7. Get latest MLflow run_id
+    - name: Get latest MLflow run_id
+      run: |
+        echo "Latest MLflow run_id:"
+        mlflow runs list --max-results 1
