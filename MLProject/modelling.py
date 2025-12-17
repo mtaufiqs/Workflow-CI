@@ -48,7 +48,7 @@ print(f"📊 Data dibagi menjadi {len(X_train)} train dan {len(X_test)} test.\n"
 # --- GANTI BAGIAN INI SESUAI AKUN KAMU ---
 username = "mtaufiqs"
 repo_name = "Telco-Customer-Churn_ML"        
-token = "e112da09dfbf78c022bd120faed1da98ba21c44e"
+token = "a67685815efad765647071cd82204763a3ea0b15"
 # ------------------------------------------
 
 # Tracking URI DagsHub
@@ -99,4 +99,5 @@ with mlflow.start_run(run_name="Baseline-RandomForest"):
 
     print("📋 Classification Report:")
     print(classification_report(y_test, y_pred))
+
 
